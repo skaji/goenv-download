@@ -1,6 +1,5 @@
 prereqs:
   runtime:
     requires:
-      File::Temp: { version: '0.2311' }
       Getopt::Long: { version: '2.52' }
       HTTP::Tinyish:

@@ -2,16 +2,6 @@
 use strict;
 use warnings;
 
-use Cwd ();
-use File::Basename ();
-use File::Copy ();
-use File::Path ();
-use File::Spec;
-use FindBin ();
-use Getopt::Long ();
-use HTTP::Tinyish;
-use POSIX ();
-
 my $HELP = <<'EOF';
 Usage: goenv download [options] [version]
 
@@ -29,17 +19,22 @@ EOF
 {
     package App;
 
-    sub catpath { File::Spec->catfile(@_) }
+    use File::Basename qw(basename);
+    use File::Path qw(mkpath);
+    use File::Spec::Functions qw(catfile);
+    use Getopt::Long ();
+    use HTTP::Tinyish;
+    use POSIX qw(uname);
 
     sub new {
         my ($class, %argv) = @_;
         my $home = $argv{home};
-        my $cache_dir = catpath $home, "cache";
-        my $root = $argv{root} || $ENV{GOENV_ROOT} || catpath($ENV{HOME}, ".goenv");
-        my $versions_dir = catpath $root, "versions";
-        File::Path::mkpath $_ for grep { !-d } $versions_dir, $cache_dir;
+        my $cache_dir = catfile $home, "cache";
+        my $root = $ENV{GOENV_ROOT} || catfile($ENV{HOME}, ".goenv");
+        my $versions_dir = catfile $root, "versions";
+        mkpath $_ for grep { !-d } $versions_dir, $cache_dir;
         my $os = $^O =~ /linux/i ? "linux" : $^O =~ /darwin/i ? "darwin" : die;
-        my $_arch = (POSIX::uname)[4];
+        my $_arch = (uname)[4];
         my $arch = $_arch eq "x86_64" ? "amd64" : $_arch eq "arm64" ? "arm64" : die;
         bless {
             os => $os,
@@ -83,7 +78,7 @@ EOF
                 die "Unknown version '$version', try `goenv download -L`\n";
             }
         }
-        my $target = catpath $self->{versions_dir}, $version;
+        my $target = catfile $self->{versions_dir}, $version;
         if (-e $target) {
             die "Already exists $target\n";
         }
@@ -122,7 +117,7 @@ EOF
         my ($self, $version) = @_;
         my $url = sprintf "https://dl.google.com/go/go%s.%s-%s.tar.gz",
             $version, $self->{os}, $self->{arch};
-        my $cache_file = catpath $self->{cache_dir}, File::Basename::basename($url);
+        my $cache_file = catfile $self->{cache_dir}, basename($url);
         if (-f $cache_file) {
             $self->log("Using cache $cache_file");
             return $cache_file;
@@ -138,12 +133,16 @@ EOF
 
     sub unpack {
         my ($self, $tarball, $target) = @_;
-        File::Path::mkpath $target;
+        mkpath $target;
         $self->log("Unpacking $tarball");
         !system "tar", "xf", $tarball, "--strip-components=1", "-C", $target or die;
     }
 }
 
-my $home = Cwd::abs_path(File::Spec->catdir($FindBin::Bin, ".."));
+use Cwd qw(abs_path);
+use File::Spec::Functions qw(catfile);
+use FindBin qw($Bin);
+
+my $home = abs_path(catfile($Bin, ".."));
 my $app = App->new(home => $home);
 exit $app->run(@ARGV);
