@@ -25,22 +25,11 @@ git clone https://github.com/skaji/goenv-download $(goenv root)/plugins/goenv-do
 1.16.9
 1.16.8
 1.16.7
-1.16.6
-1.16.5
-1.16.4
-1.16.3
-1.16.2
-1.16.1
-1.16
-1.15.15
-1.15.14
-1.15.13
-1.15.12
 
 ❯ goenv download latest
-Downloading https://dl.google.com/go/go1.17.4.darwin-amd64.tar.gz
-Unpacking /Users/skaji/src/github.com/skaji/goenv-download/cache/go1.17.4.darwin-amd64.tar.gz
-Successfully installed /Users/skaji/.goenv/versions/1.17.4
+Downloading https://dl.google.com/go/go1.16.11.darwin-amd64.tar.gz
+Unpacking /Users/skaji/env/goenv/plugins/goenv-download/cache/go1.16.11.darwin-amd64.tar.gz
+Successfully installed /Users/skaji/env/goenv/versions/1.16.11
 ```
 
 # Author
