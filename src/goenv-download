@@ -1,0 +1,150 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+
+use Cwd ();
+use File::Basename ();
+use File::Copy ();
+use File::Path ();
+use File::Spec;
+use File::Temp ();
+use FindBin ();
+use Getopt::Long ();
+use HTTP::Tinyish;
+use POSIX ();
+
+my $HELP = <<'EOF';
+Usage: goenv download [options] [version]
+
+Options:
+  -l, --list      show available versions (latest 20)
+  -L, --list-all  show available versions (all)
+  -h, --help      show this help
+
+Examples:
+ $ goenv download -l
+ $ goenv download latest
+ $ goenv download 1.17.3
+EOF
+
+{
+    package App;
+
+    sub catpath { File::Spec->catfile(@_) }
+
+    sub new {
+        my ($class, %argv) = @_;
+        my $home = $argv{home};
+        my $cache_dir = catpath $home, "cache";
+        my $root = $argv{root} || $ENV{GOENV_ROOT} || catpath($ENV{HOME}, ".goenv");
+        my $versions_dir = catpath $root, "versions";
+        File::Path::mkpath $_ for grep { !-d } $versions_dir, $cache_dir;
+        my $os = $^O =~ /linux/i ? "linux" : $^O =~ /darwin/i ? "darwin" : die;
+        my $_arch = (POSIX::uname)[4];
+        my $arch = $_arch eq "x86_64" ? "amd64" : $_arch eq "arm64" ? "arm64" : die;
+        bless {
+            os => $os,
+            arch => $arch,
+            home => $home,
+            cache_dir => $cache_dir,
+            root => $root,
+            versions_dir => $versions_dir,
+            http => HTTP::Tinyish->new(verify_SSL => 1),
+        }, $class;
+    }
+
+    sub run {
+        my ($self, @argv) = @_;
+        Getopt::Long::Parser->new(
+            config => [qw(no_auto_abbrev no_ignore_case bundling)],
+        )->getoptionsfromarray(\@argv,
+            "h|help" => sub { die $HELP },
+            "l|list" => \my $list,
+            "L|list-all" => \my $list_all,
+        ) or return 1;
+
+        if ($list || $list_all) {
+            my @available = $self->available;
+            @available = @available[0 .. 20] if $list;
+            print $_, "\n" for @available;
+            return 0;
+        }
+
+        my $version = shift @argv or die "Need version, try `goenv download --help`\n";
+        my @available = $self->available;
+        if ($version eq "latest") {
+            $version = $available[0]
+        } else {
+            my %available = map { $_ => 1 } $self->available;
+            if (!$available{$version}) {
+                die "Unknown version '$version', try `goenv download -L`\n";
+            }
+        }
+        my $target = catpath $self->{versions_dir}, $version;
+        if (-e $target) {
+            die "Already exists $target\n";
+        }
+        my $tarball = $self->download($version);
+        $self->unpack($tarball => $target);
+        $self->log("Successfully installed $target");
+    }
+
+    sub log {
+        my ($self, $msg) = @_;
+        chomp $msg;
+        warn $msg, "\n";
+    }
+
+    sub available {
+        my $self = shift;
+        my $url = "https://go.googlesource.com/go/+refs/tags?format=TEXT";
+        my $res = $self->{http}->get($url);
+        die "$res->{status} $url\n" if !$res->{success};
+        my %seen;
+        my @version;
+        for my $line (split /\n/, $res->{content}) {
+            # 6c15c7cce718e1e9a47f4f0ab1bd70923b04557b refs/tags/go1.12.10
+            my (undef, $tag) = split /\s+/, $line, 2;
+            if ($tag =~ m{^refs/tags/go((\d+)\.(\d+)(?:\.(\d+))?)$}) {
+                my $str = $1;
+                my $major = $2;
+                my $minor = $3;
+                my $patch = $4 || 0;
+                $seen{$str}++ and next;
+                my $version = sprintf "%d.%03d%03d", $major, $minor, $patch;
+                push @version, { version => $version, str => $str };
+            }
+        }
+        map { $_->{str} } sort { $b->{version} <=> $a->{version} } @version;
+    }
+
+    sub download {
+        my ($self, $version) = @_;
+        my $url = sprintf "https://dl.google.com/go/go%s.%s-%s.tar.gz",
+            $version, $self->{os}, $self->{arch};
+        my $cache_file = catpath $self->{cache_dir}, File::Basename::basename($url);
+        if (-f $cache_file) {
+            $self->log("Using cache $cache_file");
+            return $cache_file;
+        }
+        $self->log("Downloading $url");
+        my $res = $self->{http}->mirror($url => $cache_file);
+        if (!$res->{success}) {
+            unlink $cache_file;
+            die "$res->{status} $res->{reason}, $url\n";
+        }
+        $cache_file;
+    }
+
+    sub unpack {
+        my ($self, $tarball, $target) = @_;
+        my $tempdir = File::Temp->newdir;
+        $self->log("Unpacking $tarball");
+        !system "tar", "xf", $tarball, "-C", $tempdir or die;
+        File::Copy::move catpath($tempdir, "go") => $target or die;
+    }
+}
+
+my $home = Cwd::abs_path(File::Spec->catdir($FindBin::Bin, ".."));
+my $app = App->new(home => $home);
+exit $app->run(@ARGV);
