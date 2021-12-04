@@ -176,7 +176,6 @@ use File::Basename ();
 use File::Copy ();
 use File::Path ();
 use File::Spec;
-use File::Temp ();
 use FindBin ();
 use Getopt::Long ();
 use HTTP::Tinyish;
@@ -230,6 +229,7 @@ EOF
             "h|help" => sub { die $HELP },
             "l|list" => \my $list,
             "L|list-all" => \my $list_all,
+            "complete" => sub { print $_, "\n" for "-l", "-L", "latest"; exit 0 },
         ) or return 1;
 
         if ($list || $list_all) {
@@ -307,10 +307,13 @@ EOF
 
     sub unpack {
         my ($self, $tarball, $target) = @_;
-        my $tempdir = File::Temp->newdir;
+        File::Path::mkpath $target;
         $self->log("Unpacking $tarball");
-        !system "tar", "xf", $tarball, "-C", $tempdir or die;
-        File::Copy::move catpath($tempdir, "go") => $target or die;
+        my @cmd = (
+            "tar", "xf", $tarball,
+            "--strip-components=1", "-C", $target,
+        );
+        !system @cmd or die;
     }
 }
 
