@@ -1,0 +1,24 @@
+name: test
+
+on:
+  push:
+    branches:
+      - '*'
+    tags-ignore:
+      - '*'
+  pull_request:
+
+jobs:
+  ubuntu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Run Tests
+        run: |
+          set -eux
+          ./bin/goenv-download -l
+          ./bin/goenv-download -L
+          ./bin/goenv-download 1.17.4
+          ~/.goenv/versions/1.17.4/bin/go version
+          ./bin/goenv-download 1.17rc2
+          ~/.goenv/versions/1.17rc2/bin/go version
