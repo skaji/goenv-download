@@ -153,7 +153,7 @@ my $HELP = <<'EOF';
 Usage: goenv download [options] [version]
 
 Options:
-  -l, --list      show available versions (latest 10)
+  -l, --list      show available versions (latest stable 10)
   -L, --list-all  show available versions (all)
   -h, --help      show this help
 
@@ -210,7 +210,11 @@ EOF
 
         if ($list || $list_all) {
             my @available = $self->available;
-            @available = @available[0 .. 9] if $list;
+            if ($list) {
+                @available = (map { $_->{str} } grep { !$_->{rc_kind} } @available)[0..9];
+            } else {
+                @available = map { $_->{str} } @available;
+            }
             print $_, "\n" for @available;
             return 0;
         }
@@ -218,9 +222,9 @@ EOF
         my $version = shift @argv or die "Need version, try `goenv download --help`\n";
         my @available = $self->available;
         if ($version eq "latest") {
-            $version = $available[0]
+            $version = (map { $_->{str} } grep { !$_->{rc} } @available)[0];
         } else {
-            my %available = map { $_ => 1 } $self->available;
+            my %available = map { $_ => 1 } map { $_->{str} } $self->available;
             if (!$available{$version}) {
                 die "Unknown version '$version', try `goenv download -L`\n";
             }
@@ -247,17 +251,40 @@ EOF
         for my $line (split /\n/, $res->{content}) {
             # 6c15c7cce718e1e9a47f4f0ab1bd70923b04557b refs/tags/go1.12.10
             my (undef, $tag) = split /\s+/, $line, 2;
-            if ($tag =~ m{^refs/tags/go((\d+)\.(\d+)(?:\.(\d+))?)$}) {
-                my $str = $1;
-                my $major = $2;
-                my $minor = $3;
-                my $patch = $4 || 0;
+            if (my ($str, $major, $minor, $other) = $tag =~ m{^refs/tags/go((\d+)\.(\d+)(?:([0-9a-zA-Z.]+))?)$}) {
+                my ($patch, $rc_kind, $rc_num) = (0, undef, 0);
+                if ($other) {
+                    $other =~ s/^\.//;
+                    if ($other =~ s/^(\d+)//) {
+                        $patch = $1;
+                    }
+                    if ($other =~ /^(rc|beta|alpha)(?:\d+)$/) {
+                        $rc_kind = $1;
+                        $rc_num = $2 || 0;
+                    }
+                }
                 $seen{$str}++ and next;
                 my $version = sprintf "%d.%03d%03d", $major, $minor, $patch;
-                push @version, { version => $version, str => $str };
+                push @version, { version => $version, str => $str, rc_kind => $rc_kind, rc_num => $rc_num };
             }
         }
-        map { $_->{str} } sort { $b->{version} <=> $a->{version} } @version;
+        my $sort_by = sub {
+            my ($a, $b) = @_;
+            if (my $ret = $a->{version} <=> $b->{version}) {
+                return $ret;
+            }
+            my %kind = ( alpha => 1, beta => 2, rc => 3 );
+            my ($rc_kind_a, $rc_kind_b) = ($a->{rc_kind}, $b->{rc_kind});
+            if ($rc_kind_a && !$rc_kind_b) {
+                return -1;
+            } elsif (!$rc_kind_a && $rc_kind_b) {
+                return 1;
+            } elsif (my $ret = $kind{$rc_kind_a} <=> $kind{$rc_kind_b}) {
+                return $ret;
+            }
+            return $a->{rc_num} <=> $b->{rc_num};
+        };
+        reverse sort { $sort_by->($a, $b) } @version;
     }
 
     sub download {
