@@ -14,6 +14,8 @@ Examples:
  $ goenv download -l
  $ goenv download latest
  $ goenv download 1.17.3
+ $ goenv download HEAD              # download golang source code, and build HEAD
+ $ goenv download source@6f42be78bb # download golang source code, and build commit 6f42be78bb
 EOF
 
 {
@@ -22,9 +24,10 @@ EOF
     use File::Basename qw(basename);
     use File::Path qw(mkpath);
     use File::Spec::Functions qw(catfile);
+    use File::pushd qw(pushd);
     use Getopt::Long ();
     use HTTP::Tinyish;
-    use POSIX qw(uname);
+    use POSIX qw(uname strftime);
 
     sub new {
         my ($class, %argv) = @_;
@@ -73,6 +76,12 @@ EOF
         }
 
         my $version = shift @argv or die "Need version, try `goenv download --help`\n";
+
+        if ($version eq "HEAD" || $version =~ s/source@//) {
+            $self->build_from_source($version);
+            return 0;
+        }
+
         my @available = $self->available;
         if ($version eq "latest") {
             $version = (map { $_->{str} } grep { !$_->{rc} } @available)[0];
@@ -163,6 +172,51 @@ EOF
         mkpath $target;
         $self->log("Unpacking $tarball");
         !system "tar", "xf", $tarball, "--strip-components=1", "-C", $target or die;
+    }
+
+    sub build_from_source {
+        my ($self, $commitish) = @_;
+
+        my $url = "https://github.com/golang/go";
+
+        my $reference = catfile $self->{cache_dir}, "reference";
+        if (-d $reference) {
+            my $guard = pushd $reference;
+            my @cmd = ("git", "pull");
+            $self->log("Updating $reference");
+            !system @cmd or die;
+        } else {
+            my @cmd = ("git", "clone", "-q", $url, $reference);
+            $self->log("Executing @cmd");
+            !system @cmd or die;
+        }
+
+        if ($commitish eq "HEAD") {
+            my $guard = pushd $reference;
+            $commitish = `git rev-parse --short HEAD`;
+            chomp $commitish;
+        }
+        my $target = catfile $self->{versions_dir}, strftime("%Y%m%d-", localtime) . $commitish;
+
+        my @cmd = ("git", "clone", "-q", "--reference", $reference, $url, $target);
+        $self->log("Executing @cmd");
+        !system @cmd or die;
+
+        my $guard = pushd $target;
+        @cmd = ("git", "checkout", "-q", $commitish);
+        $self->log("Executing @cmd");
+        !system @cmd or die;
+
+        {
+            my $guard = pushd "src";
+            my @cmd = ("bash", "make.bash");
+            $self->log("Executing @cmd");
+            !system @cmd or die;
+        }
+
+        @cmd = ("bin/go", "install", "-race", "std");
+        $self->log("Executing @cmd");
+        !system @cmd or die;
     }
 }
 
