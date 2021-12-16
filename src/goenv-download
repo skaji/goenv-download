@@ -84,7 +84,7 @@ EOF
 
         my @available = $self->available;
         if ($version eq "latest") {
-            $version = (map { $_->{str} } grep { !$_->{rc} } @available)[0];
+            $version = (map { $_->{str} } grep { !$_->{rc_kind} } @available)[0];
         } else {
             my %available = map { $_ => 1 } map { $_->{str} } $self->available;
             if (!$available{$version}) {
