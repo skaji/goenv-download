@@ -266,7 +266,10 @@ EOF
         my $self = shift;
         my $url = "https://go.googlesource.com/go/+refs/tags?format=TEXT";
         my $res = $self->{http}->get($url);
-        die "$res->{status} $url\n" if !$res->{success};
+        if (!$res->{success}) {
+            warn $res->{content} if $res->{status} == 599;
+            die "$res->{status} $res->{reason}, $url\n";
+        }
         my %seen;
         my @version;
         for my $line (split /\n/, $res->{content}) {
@@ -321,6 +324,7 @@ EOF
         my $res = $self->{http}->mirror($url => $cache_file);
         if (!$res->{success}) {
             unlink $cache_file;
+            warn $res->{content} if $res->{status} == 599;
             die "$res->{status} $res->{reason}, $url\n";
         }
         $cache_file;
