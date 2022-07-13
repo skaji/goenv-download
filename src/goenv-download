@@ -7,6 +7,7 @@ Usage: goenv download [options] [version]
 
 Options:
   -l, --list      show available versions (latest stable 10)
+  -g, --global    executing `goenv globa` after installation
   -L, --list-all  show available versions (all)
   -h, --help      show this help
 
@@ -60,6 +61,7 @@ EOF
             \@argv,
             "h|help" => sub { die $HELP },
             "l|list" => \my $list,
+            "g|global" => \my $global,
             "L|list-all" => \my $list_all,
             "complete" => sub { print $_, "\n" for "-l", "-L", "latest"; exit 0 },
         ) or return 1;
@@ -98,6 +100,10 @@ EOF
         my $tarball = $self->download($version);
         $self->unpack($tarball => $target);
         $self->log("Successfully installed $target");
+        if ($global) {
+            $self->log("Executing `goenv global $version`");
+            !system "goenv", "global", $version or die;
+        }
         return 0;
     }
 
