@@ -190,7 +190,9 @@ EOF
         mkpath $_ for grep { !-d } $versions_dir, $cache_dir;
         my $os = $^O =~ /linux/i ? "linux" : $^O =~ /darwin/i ? "darwin" : die;
         my $_arch = (uname)[4];
-        my $arch = $_arch eq "x86_64" ? "amd64" : $_arch eq "arm64" ? "arm64" : die;
+        my $arch = $_arch eq "x86_64"  ? "amd64"
+                 : $_arch eq "arm64"   ? "arm64"
+                 : $_arch eq "aarch64" ? "arm64" : die;
         bless {
             os => $os,
             arch => $arch,
