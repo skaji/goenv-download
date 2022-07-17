@@ -3,7 +3,7 @@
 An alternative to https://github.com/syndbg/goenv/tree/master/plugins/go-build
 
 While go-build keeps *definitions* in its `share/` directory statically,
-goenv download gets them from https://go.googlesource.com/go/+refs/tags?format=TEXT dynamically.
+goenv download gets them from https://go.dev/dl/?mode=json&include=all dynamically.
 
 # Install
 
