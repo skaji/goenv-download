@@ -7,8 +7,9 @@ Usage: goenv download [options] [version]
 
 Options:
   -l, --list      show available versions (latest stable 10)
-  -g, --global    executing `goenv globa` after installation
   -L, --list-all  show available versions (all)
+  -g, --global    execute `goenv globa` after installation
+  -r, --rehash    execute `goenv rehash` after installation
   -h, --help      show this help
 
 Examples:
@@ -65,6 +66,7 @@ EOF
             "h|help" => sub { die $HELP },
             "l|list" => \my $list,
             "g|global" => \my $global,
+            "r|rehash" => \my $rehash,
             "L|list-all" => \my $list_all,
             "complete" => sub { print $_, "\n" for "-l", "-L", "latest"; exit 0 },
         ) or return 1;
@@ -106,6 +108,10 @@ EOF
         if ($global) {
             $self->log("Executing `goenv global $version`");
             !system "goenv", "global", $version or die;
+        }
+        if ($rehash) {
+            $self->log("Executing `goenv rehash`");
+            !system "goenv", "rehash" or die;
         }
         return 0;
     }
